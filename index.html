@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<!-- Tennis Picks PWA: a read-only phone view of the btc15m tennis lane.
+     Hosted on GitHub Pages; data arrives as tennis.json on the `data`
+     branch of this repo, force-pushed by the Mac server on every new
+     call, grade, and restart. Install via Safari: Share > Add to Home
+     Screen. Works anywhere, including cellular. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tennis Picks</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e1a14">
+<style>
+  :root {
+    --bg: #0e1a14; --card: #16261e; --line: #24382e;
+    --text: #e8f0ea; --dim: #93a89b; --accent: #b8ff57;
+    --green: #4ade80; --red: #f87171; --blue: #7dd3fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, "SF Pro Text", Helvetica, sans-serif;
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+  }
+  header {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
+  }
+  h1 { margin: 0 0 2px; font-size: 20px; }
+  .record { font-size: 16px; font-weight: 700; }
+  .record .pnl-pos { color: var(--green); }
+  .record .pnl-neg { color: var(--red); }
+  .sub, .scout { color: var(--dim); font-size: 12px; }
+  main { padding: 10px 12px 40px; max-width: 640px; margin: 0 auto; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+       color: var(--dim); margin: 18px 4px 8px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .meta { color: var(--dim); font-size: 12px; }
+  .title { font-weight: 700; font-size: 16px; margin: 2px 0 6px; }
+  .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .pick { font-size: 19px; font-weight: 800; color: var(--accent); }
+  .stake { color: var(--dim); font-weight: 600; }
+  .nums { font-size: 13px; color: var(--dim); margin: 3px 0 6px; }
+  .nums b { color: var(--text); }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 800;
+    background: rgba(251,146,60,.2); color: #fdba74;
+    border-radius: 99px; padding: 1px 8px; vertical-align: 1px;
+  }
+  .h2h {
+    border-left: 3px solid var(--blue); background: rgba(125,211,252,.07);
+    border-radius: 6px; padding: 7px 10px; margin: 6px 0; font-size: 13px;
+  }
+  .h2h .rows { color: var(--dim); font-size: 12px; margin-top: 3px; }
+  .headline { font-weight: 600; margin: 6px 0; }
+  details { margin-top: 6px; }
+  summary { color: var(--blue); font-size: 13px; cursor: pointer; }
+  .analysis { font-size: 13px; color: var(--text); margin: 8px 0; }
+  .form-player { font-weight: 700; font-size: 13px; margin-top: 8px; }
+  .form-sum { color: var(--dim); font-size: 12px; }
+  table.form { border-collapse: collapse; margin: 4px 0; width: 100%; }
+  table.form td { font-size: 12px; padding: 1px 8px 1px 0; vertical-align: top; }
+  td.w { color: var(--green); font-weight: 700; }
+  td.l { color: var(--red); font-weight: 700; }
+  .note { color: var(--dim); }
+  .factor { font-size: 12px; margin: 3px 0; }
+  .tail { color: var(--dim); font-size: 12px; margin-top: 6px; }
+  .logline { font-size: 13px; font-weight: 700; margin: 0 4px 8px; }
+  .logrow {
+    display: flex; justify-content: space-between; gap: 10px;
+    padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .logrow .who { flex: 1; min-width: 0; }
+  .logrow .sub2 { color: var(--dim); font-size: 12px; }
+  .res-w { color: var(--green); font-weight: 700; white-space: nowrap; }
+  .res-l { color: var(--red); font-weight: 700; white-space: nowrap; }
+  button.more {
+    display: block; margin: 14px auto; background: var(--card);
+    color: var(--blue); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 22px; font-size: 14px;
+  }
+  .status { text-align: center; color: var(--dim); padding: 30px 20px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tennis Picks</h1>
+  <div class="record" id="record">Loading…</div>
+  <div class="sub" id="updated"></div>
+  <div class="scout" id="scout"></div>
+</header>
+<main>
+  <div id="content"><div class="status">Fetching latest calls…</div></div>
+</main>
+<script>
+const DATA_URL =
+  "https://raw.githubusercontent.com/rbarbish/tennis-picks/data/tennis.json";
+const LOG_PAGE = 25;
+let logShown = LOG_PAGE;
+let lastPayload = null;
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const pct = v => v == null ? "?" : Math.round(v * 100) + "%";
+const cents = v => v == null ? "?" : Math.round(v * 100) + "¢";
+const money = v => (v >= 0 ? "+$" : "−$") + Math.abs(v).toFixed(2);
+
+function agoLine(iso) {
+  if (!iso) return "";
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+  if (mins < 1) return "updated just now";
+  if (mins < 90) return "updated " + mins + "m ago";
+  return "updated " + (mins / 60).toFixed(1) + "h ago";
+}
+
+function h2hHtml(h) {
+  if (!h || !h.summary) return "";
+  const rows = (h.matches || []).map(m =>
+    `${esc(m.date || m.year || "")} · ${esc(m.tournament || "")}` +
+    `${m.surface ? " (" + esc(m.surface) + ")" : ""} — ` +
+    `${esc(m.winner || "")} ${esc(m.score || "")}`).join("<br>");
+  return `<div class="h2h"><b>H2H: ${esc(h.summary)}</b>` +
+         (rows ? `<div class="rows">${rows}</div>` : "") + `</div>`;
+}
+
+function formHtml(list) {
+  return (list || []).map(p => {
+    const rows = (p.matches || []).map(m =>
+      `<tr><td class="note">${esc(m.date || "")}</td>` +
+      `<td class="${m.result === "W" ? "w" : "l"}">${esc(m.result || "")}</td>` +
+      `<td>${esc(m.opponent || "")} ${esc(m.score || "")}` +
+      (m.note ? `<div class="note">${esc(m.note)}</div>` : "") +
+      `</td></tr>`).join("");
+    return `<div class="form-player">${esc(p.player || "")}</div>` +
+           (p.summary ? `<div class="form-sum">${esc(p.summary)}</div>` : "") +
+           (rows ? `<table class="form">${rows}</table>` : "");
+  }).join("");
+}
+
+function cardHtml(m) {
+  const live = (m.live_bid != null || m.live_ask != null)
+    ? ` · now <b>${cents(m.live_bid)}/${cents(m.live_ask)}</b>` : "";
+  const conf = m.confidence != null
+    ? ` · conf <b>${pct(m.confidence)}</b>` : "";
+  const factors = (m.key_factors || []).map(f =>
+    `<div class="factor">• <b>${esc(f.factor || "")}</b>: ` +
+    `${esc(f.lean || "")}${f.note ? " — " + esc(f.note) : ""}</div>`).join("");
+  return `<div class="card">
+    <div class="meta">${esc([m.tour, m.tournament, m.match_date]
+                            .filter(Boolean).join(" · "))}</div>
+    <div class="title">${esc(m.title || "")}</div>
+    <div class="pickline"><span class="pick">PICK: ${esc(m.pick || "?")}</span>
+      <span class="stake">$${Math.round(m.stake || 0)}</span>
+      ${m.in_play ? '<span class="badge">IN PLAY</span>' : ""}</div>
+    <div class="nums">AI <b>${pct(m.prob)}</b> vs <b>${cents(m.price)}</b>${conf}${live}</div>
+    ${h2hHtml(m.h2h)}
+    ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
+    <details data-key="${esc(m.id)}"><summary>Analysis, form &amp; factors</summary>
+      ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
+      ${formHtml(m.recent_form)}${factors}
+      ${m.tail_risk ? `<div class="tail">Tail risk: ${esc(m.tail_risk)}</div>` : ""}
+    </details></div>`;
+}
+
+function logRowHtml(r) {
+  const won = r.won === 1;
+  return `<div class="logrow"><div class="who">${esc(r.title || "")}
+      <div class="sub2">${esc(r.match_date || "")} · ${esc(r.pick || "")}
+        · AI ${pct(r.prob)} vs ${cents(r.price)}</div></div>
+    <div class="${won ? "res-w" : "res-l"}">${won ? "✓" : "✗"}
+      ${money(r.pnl || 0)}</div></div>`;
+}
+
+function render(p) {
+  const rec = (p.log && p.log.record) || {graded: 0, wins: 0, pnl: 0};
+  document.getElementById("record").innerHTML = rec.graded
+    ? `${rec.wins}/${rec.graded} calls right · ` +
+      `<span class="${rec.pnl >= 0 ? "pnl-pos" : "pnl-neg"}">as-if ${money(rec.pnl)}</span>`
+    : "No graded calls yet";
+  document.getElementById("updated").textContent = agoLine(p.generated_at);
+  const s = (p.open && p.open.scout) || {};
+  document.getElementById("scout").textContent = [
+    s.phase === "analyzing" && s.current ? "researching " + s.current : s.phase,
+    s.open_count != null ? s.open_count + "/20 slots" : null,
+    s.count_24h != null ? s.count_24h + " in 24h" : null,
+    s.model, s.error ? "⚠ " + s.error : null,
+  ].filter(Boolean).join(" · ");
+
+  const openKeys = new Set([...document.querySelectorAll("details[open]")]
+    .map(d => d.dataset.key));
+  const matches = (p.open && p.open.matches) || [];
+  const rows = ((p.log && p.log.rows) || []).slice(0, logShown);
+  const wins = rows.filter(r => r.won === 1).length;
+  const pnl = rows.reduce((a, r) => a + (r.pnl || 0), 0);
+  const total = (p.log && p.log.total) || 0;
+
+  document.getElementById("content").innerHTML =
+    `<h2>Open calls (${matches.length})</h2>` +
+    (matches.length ? matches.map(cardHtml).join("")
+      : `<div class="status">No open calls — settled ones are below.</div>`) +
+    `<h2>Call log (${total} settled)</h2>` +
+    (rows.length
+      ? `<div class="logline">These ${rows.length}: ${wins}W/${rows.length - wins}L
+           · <span class="${pnl >= 0 ? "res-w" : "res-l"}">${money(pnl)}</span></div>` +
+        rows.map(logRowHtml).join("") +
+        (logShown < ((p.log && p.log.rows) || []).length
+          ? `<button class="more" onclick="logShown+=${LOG_PAGE};render(lastPayload)">Show more</button>` : "")
+      : "");
+  openKeys.forEach(k => {
+    const d = document.querySelector(`details[data-key="${k}"]`);
+    if (d) d.open = true;
+  });
+}
+
+async function refresh() {
+  try {
+    const r = await fetch(DATA_URL + "?t=" + Math.floor(Date.now() / 30000),
+                          {cache: "no-store"});
+    if (!r.ok) throw new Error(r.status);
+    lastPayload = await r.json();
+    render(lastPayload);
+  } catch (e) {
+    if (!lastPayload)
+      document.getElementById("content").innerHTML =
+        `<div class="status">Couldn’t fetch data (${esc(e.message)}).
+         The Mac server may not have published yet — pull down or retry
+         in a minute.</div>`;
+  }
+}
+
+refresh();
+setInterval(refresh, 60000);
+document.addEventListener("visibilitychange",
+  () => { if (!document.hidden) refresh(); });
+</script>
+</body>
+</html>
