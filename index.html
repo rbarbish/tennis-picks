@@ -24,11 +24,19 @@
   body {
     margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.45 -apple-system, "SF Pro Text", Helvetica, sans-serif;
-    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    padding: 0 0 env(safe-area-inset-bottom);
   }
+  /* The header's own padding clears the status bar / Dynamic Island, so
+     its background fills that strip instead of content sliding under it. */
   header {
     position: sticky; top: 0; z-index: 5; background: var(--bg);
-    padding: 14px 16px 10px; border-bottom: 1px solid var(--line);
+    padding: calc(env(safe-area-inset-top) + 12px) 16px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  #ptr {
+    height: 0; overflow: hidden; display: flex; align-items: flex-end;
+    justify-content: center; color: var(--dim); font-size: 12px;
+    padding-bottom: 4px; transition: height .18s ease;
   }
   h1 { margin: 0 0 2px; font-size: 20px; }
   .record { font-size: 16px; font-weight: 700; }
@@ -41,6 +49,12 @@
   .card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
+    scroll-margin-top: 120px;   /* clears the sticky header when linked to */
+  }
+  .card.flash {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(184,255,87,.25);
+    transition: border-color .3s, box-shadow .3s;
   }
   .meta { color: var(--dim); font-size: 12px; }
   .title { font-weight: 700; font-size: 16px; margin: 2px 0 6px; }
@@ -101,6 +115,7 @@
 </style>
 </head>
 <body>
+<div id="ptr"></div>
 <header>
   <h1>Tennis Picks</h1>
   <div class="record" id="record">Loading…</div>
@@ -171,7 +186,7 @@ function cardHtml(m) {
   const factors = (m.key_factors || []).map(f =>
     `<div class="factor">• <b>${esc(f.factor || "")}</b>: ` +
     `${esc(f.lean || "")}${f.note ? " — " + esc(f.note) : ""}</div>`).join("");
-  return `<div class="card">
+  return `<div class="card" id="call-${esc(m.id)}">
     <div class="meta">${esc([m.tour, m.tournament, m.match_date]
                             .filter(Boolean).join(" · "))}</div>
     <div class="title">${esc(m.title || "")}</div>
@@ -236,7 +251,27 @@ function render(p) {
     const d = document.querySelector(`details[data-key="${k}"]`);
     if (d) d.open = true;
   });
+  if (pendingScroll != null && scrollToCall(pendingScroll)) pendingScroll = null;
 }
+
+// ---- Deep link from a tapped notification ----
+let pendingScroll = new URLSearchParams(location.search).get("call");
+
+function scrollToCall(id) {
+  const el = document.getElementById("call-" + id);
+  if (!el) return false;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 3000);
+  return true;
+}
+
+if ("serviceWorker" in navigator)
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const id = e.data && e.data.call;
+    if (id == null) return;
+    if (!scrollToCall(id)) { pendingScroll = id; refresh(); }
+  });
 
 async function refresh() {
   try {
@@ -310,6 +345,46 @@ function copySub() {
 
 if ("serviceWorker" in navigator)
   navigator.serviceWorker.register("sw.js").catch(() => {});
+
+// ---- Pull to refresh (installed web apps get no native gesture) ----
+(function () {
+  const ptr = document.getElementById("ptr");
+  const TRIGGER = 62, MAX = 90;
+  let startY = null, pulling = false, busy = false;
+
+  addEventListener("touchstart", (e) => {
+    startY = (scrollY <= 0 && e.touches.length === 1)
+      ? e.touches[0].clientY : null;
+    pulling = false;
+  }, { passive: true });
+
+  addEventListener("touchmove", (e) => {
+    if (startY == null || busy) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0 || scrollY > 0) { ptr.style.height = "0px"; pulling = false; return; }
+    pulling = true;
+    const h = Math.min(dy * 0.5, MAX);
+    ptr.style.transition = "none";
+    ptr.style.height = h + "px";
+    ptr.textContent = h >= TRIGGER ? "Release to refresh" : "Pull to refresh";
+  }, { passive: true });
+
+  addEventListener("touchend", async () => {
+    const h = parseFloat(ptr.style.height) || 0;
+    startY = null;
+    ptr.style.transition = "";
+    if (!pulling || busy) { ptr.style.height = "0px"; return; }
+    pulling = false;
+    if (h >= TRIGGER) {
+      busy = true;
+      ptr.style.height = "34px";
+      ptr.textContent = "Refreshing…";
+      await refresh();
+      busy = false;
+    }
+    ptr.style.height = "0px";
+  }, { passive: true });
+})();
 
 refresh();
 setInterval(refresh, 60000);
