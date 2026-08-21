@@ -140,6 +140,8 @@ const LOG_PAGE = 25;
 let logShown = LOG_PAGE;
 let lastPayload = null;
 
+const modelLabel = id => ({ "claude-fable-5": "Fable 5",
+  "claude-opus-5": "Opus 5", "claude-sonnet-5": "Sonnet 5" }[id] || id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const pct = v => v == null ? "?" : Math.round(v * 100) + "%";
@@ -187,7 +189,9 @@ function cardHtml(m) {
     `<div class="factor">• <b>${esc(f.factor || "")}</b>: ` +
     `${esc(f.lean || "")}${f.note ? " — " + esc(f.note) : ""}</div>`).join("");
   return `<div class="card" id="call-${esc(m.id)}">
-    <div class="meta">${esc([m.tour, m.tournament, m.match_date]
+    <div class="meta">${esc([m.tour, m.tournament, m.match_date,
+                             m.model ? modelLabel(m.model) +
+                               (m.effort ? " " + m.effort : "") : null]
                             .filter(Boolean).join(" · "))}</div>
     <div class="title">${esc(m.title || "")}</div>
     <div class="pickline"><span class="pick">PICK: ${esc(m.pick || "?")}</span>
@@ -222,7 +226,9 @@ function render(p) {
   const s = (p.open && p.open.scout) || {};
   document.getElementById("scout").textContent = [
     s.phase === "analyzing" && s.current ? "researching " + s.current : s.phase,
-    s.open_count != null ? s.open_count + "/20 slots" : null,
+    s.open_count != null
+      ? s.open_count + "/" + ((s.settings && s.settings.max_open) || 15) + " slots"
+      : null,
     s.count_24h != null ? s.count_24h + " in 24h" : null,
     s.model, s.error ? "⚠ " + s.error : null,
   ].filter(Boolean).join(" · ");
