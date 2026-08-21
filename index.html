@@ -87,6 +87,17 @@
     padding: 8px 22px; font-size: 14px;
   }
   .status { text-align: center; color: var(--dim); padding: 30px 20px; }
+  .pushrow { margin: 22px 4px 0; }
+  .pushrow button {
+    background: var(--card); color: var(--accent); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 16px; font-size: 14px;
+  }
+  .pushrow .msg { color: var(--dim); font-size: 12px; margin-top: 6px; }
+  .pushrow textarea {
+    width: 100%; height: 70px; margin-top: 8px; font-size: 10px;
+    background: var(--card); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px;
+  }
 </style>
 </head>
 <body>
@@ -98,6 +109,14 @@
 </header>
 <main>
   <div id="content"><div class="status">Fetching latest calls…</div></div>
+  <div class="pushrow" id="pushrow">
+    <button onclick="enablePush()">🔔 Enable notifications</button>
+    <div class="msg" id="pushmsg"></div>
+    <div id="pushout" style="display:none">
+      <textarea id="pushtext" readonly></textarea>
+      <button onclick="copySub()">Copy subscription</button>
+    </div>
+  </div>
 </main>
 <script>
 const DATA_URL =
@@ -234,6 +253,63 @@ async function refresh() {
          in a minute.</div>`;
   }
 }
+
+// ---- Push notifications (iOS 16.4+, installed PWAs only) ----
+// Subscribes through Apple's Web Push service using the server's VAPID
+// key (shipped inside tennis.json), then hands the subscription to the
+// Mac by clipboard: copy here, paste into the Tennis tab's "Web push"
+// box (Universal Clipboard carries it across devices).
+function vapidBytes(s) {
+  const b64 = (s + "=".repeat((4 - s.length % 4) % 4))
+    .replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+async function enablePush() {
+  const msg = document.getElementById("pushmsg");
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      msg.textContent = "Not supported here — install first: Share → Add to " +
+        "Home Screen, then open from the icon.";
+      return;
+    }
+    if (!lastPayload || !lastPayload.vapid) {
+      msg.textContent = "Server key not published yet — try again in a few minutes.";
+      return;
+    }
+    const reg = await navigator.serviceWorker.register("sw.js");
+    await navigator.serviceWorker.ready;
+    if (await Notification.requestPermission() !== "granted") {
+      msg.textContent = "Notifications were denied.";
+      return;
+    }
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: vapidBytes(lastPayload.vapid),
+    });
+    document.getElementById("pushtext").value = JSON.stringify(sub);
+    document.getElementById("pushout").style.display = "block";
+    msg.textContent = "Copy this, then on the Mac paste it into the Tennis " +
+      "tab’s “Web push” box and hit Register.";
+  } catch (e) {
+    msg.textContent = "Couldn’t subscribe: " + e.message +
+      (window.navigator.standalone ? "" :
+       " — install via Share → Add to Home Screen and open from the icon.");
+  }
+}
+
+function copySub() {
+  const t = document.getElementById("pushtext");
+  t.select();
+  navigator.clipboard.writeText(t.value).then(
+    () => { document.getElementById("pushmsg").textContent =
+      "Copied — now paste on the Mac (Tennis tab → Web push → Register)."; },
+    () => { document.getElementById("pushmsg").textContent =
+      "Copy failed — long-press the text and copy manually."; });
+}
+
+if ("serviceWorker" in navigator)
+  navigator.serviceWorker.register("sw.js").catch(() => {});
 
 refresh();
 setInterval(refresh, 60000);
