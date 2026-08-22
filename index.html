@@ -180,6 +180,19 @@ function formHtml(list) {
   }).join("");
 }
 
+function commonHtml(co) {
+  if (!co) return "";
+  const rows = (co.rows || []).map(r =>
+    `<tr><td class="note" style="white-space:nowrap;padding-right:8px">` +
+    `<b>${esc(r.opponent || "")}</b></td><td>${esc(r.a_result || "")}<br>` +
+    `${esc(r.b_result || "")}` +
+    (r.note ? `<div class="note">${esc(r.note)}</div>` : "") +
+    `</td></tr>`).join("");
+  return `<div class="form-player">Common opponents &amp; style matchups</div>` +
+    (co.summary ? `<div class="form-sum">${esc(co.summary)}</div>` : "") +
+    (rows ? `<table class="form">${rows}</table>` : "");
+}
+
 function cardHtml(m) {
   const live = (m.live_bid != null || m.live_ask != null)
     ? ` · now <b>${cents(m.live_bid)}/${cents(m.live_ask)}</b>` : "";
@@ -202,7 +215,7 @@ function cardHtml(m) {
     ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
     <details data-key="${esc(m.id)}"><summary>Analysis, form &amp; factors</summary>
       ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
-      ${formHtml(m.recent_form)}${factors}
+      ${commonHtml(m.common_opponents)}${formHtml(m.recent_form)}${factors}
       ${m.tail_risk ? `<div class="tail">Tail risk: ${esc(m.tail_risk)}</div>` : ""}
     </details></div>`;
 }
@@ -281,8 +294,7 @@ if ("serviceWorker" in navigator)
 
 async function refresh() {
   try {
-    const r = await fetch(DATA_URL + "?t=" + Math.floor(Date.now() / 30000),
-                          {cache: "no-store"});
+    const r = await fetch(DATA_URL + "?t=" + Date.now(), {cache: "no-store"});
     if (!r.ok) throw new Error(r.status);
     lastPayload = await r.json();
     render(lastPayload);
