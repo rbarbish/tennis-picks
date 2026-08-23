@@ -80,7 +80,12 @@
   .form-player { font-weight: 700; font-size: 13px; margin-top: 8px; }
   .form-sum { color: var(--dim); font-size: 12px; }
   table.form { border-collapse: collapse; margin: 4px 0; width: 100%; }
-  table.form td { font-size: 12px; padding: 1px 8px 1px 0; vertical-align: top; }
+  table.form td { font-size: 12px; padding: 1px 8px 1px 0; vertical-align: top;
+                  overflow-wrap: anywhere; }
+  /* Fixed layout only for the common-opponents table, so the left column
+     can't crush the results column on a phone. */
+  table.co { table-layout: fixed; }
+  table.co td.who { width: 38%; }
   td.w { color: var(--green); font-weight: 700; }
   td.l { color: var(--red); font-weight: 700; }
   .note { color: var(--dim); }
@@ -183,14 +188,12 @@ function formHtml(list) {
 function commonHtml(co) {
   if (!co) return "";
   const rows = (co.rows || []).map(r =>
-    `<tr><td class="note" style="white-space:nowrap;padding-right:8px">` +
-    `<b>${esc(r.opponent || "")}</b></td><td>${esc(r.a_result || "")}<br>` +
-    `${esc(r.b_result || "")}` +
+    `<tr><td class="who"><b>${esc(r.opponent || "")}</b></td>` +
+    `<td>${esc(r.a_result || "")}<br>${esc(r.b_result || "")}` +
     (r.note ? `<div class="note">${esc(r.note)}</div>` : "") +
     `</td></tr>`).join("");
-  return `<div class="form-player">Common opponents &amp; style matchups</div>` +
-    (co.summary ? `<div class="form-sum">${esc(co.summary)}</div>` : "") +
-    (rows ? `<table class="form">${rows}</table>` : "");
+  return (co.summary ? `<div class="form-sum">${esc(co.summary)}</div>` : "") +
+    (rows ? `<table class="form co">${rows}</table>` : "");
 }
 
 function cardHtml(m) {
@@ -201,6 +204,15 @@ function cardHtml(m) {
   const factors = (m.key_factors || []).map(f =>
     `<div class="factor">• <b>${esc(f.factor || "")}</b>: ` +
     `${esc(f.lean || "")}${f.note ? " — " + esc(f.note) : ""}</div>`).join("");
+  const common = commonHtml(m.common_opponents);
+  const form = formHtml(m.recent_form);
+  const tail = m.tail_risk
+    ? `<div class="tail">Tail risk: ${esc(m.tail_risk)}</div>` : "";
+  // Mirrors the Mac tab: H2H pinned, headline and analysis in the open,
+  // then the same three foldouts in the same order.
+  const fold = (key, label, body) => body
+    ? `<details data-key="${key}-${esc(m.id)}"><summary>${label}</summary>` +
+      `${body}</details>` : "";
   return `<div class="card" id="call-${esc(m.id)}">
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
@@ -213,11 +225,11 @@ function cardHtml(m) {
     <div class="nums">AI <b>${pct(m.prob)}</b> vs <b>${cents(m.price)}</b>${conf}${live}</div>
     ${h2hHtml(m.h2h)}
     ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
-    <details data-key="${esc(m.id)}"><summary>Analysis, form &amp; factors</summary>
-      ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
-      ${commonHtml(m.common_opponents)}${formHtml(m.recent_form)}${factors}
-      ${m.tail_risk ? `<div class="tail">Tail risk: ${esc(m.tail_risk)}</div>` : ""}
-    </details></div>`;
+    ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
+    ${fold("co", "common opponents &amp; style matchups", common)}
+    ${fold("form", "recent form · last 5 matches", form)}
+    ${fold("fx", "factors &amp; tail risk", factors + tail)}
+  </div>`;
 }
 
 function logRowHtml(r) {
