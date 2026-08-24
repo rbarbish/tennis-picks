@@ -330,7 +330,8 @@ function render(p) {
   document.getElementById("updated").textContent = agoLine(p.generated_at);
   const s = (p.open && p.open.scout) || {};
   const busy = (s.current_list && s.current_list.length)
-    ? s.current_list : (s.current ? [s.current] : []);
+    ? s.current_list
+    : (s.current ? String(s.current).split(" + ") : []);
   document.getElementById("agents").innerHTML = busy.map((t, i) =>
     `<div>agent ${i + 1}: <b>${esc(t)}</b></div>`).join("");
   document.getElementById("scout").textContent = [
@@ -534,7 +535,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "1399af282075";
+const APP_VERSION = "037eab24cfa0";
 
 async function checkForUpdate() {
   try {
