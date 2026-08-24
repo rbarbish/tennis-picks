@@ -236,20 +236,37 @@ function commonHtml(co) {
 
 const MEDAL_ICON = { gold: "\u{1F947}", silver: "\u{1F948}", bronze: "\u{1F949}" };
 
-function rankSuffix(m) {
+function titleWithRanks(m) {
+  const title = m.title || "";
   const list = (m.ranks || []).filter((r) => r && r.rank);
-  if (!list.length) return "";
-  const title = (m.title || "").toLowerCase();
-  const at = (r) => {
-    const parts = String(r.player || "").toLowerCase().split(/\s+/);
+  if (!list.length) return esc(title);
+  // Put each rank straight after that player's name in the title, so a
+  // doubles line reads "Muhammad (#12) / Stollar (#31) vs ...".
+  const marks = [];
+  const used = new Set();
+  list.forEach((r) => {
+    // Match on a word boundary so short surnames ("Xu") are found and
+    // long ones cannot match inside another word.
+    const parts = String(r.player || "").split(/\s+/).filter(Boolean);
     for (let i = parts.length - 1; i >= 0; i--) {
-      const k = title.indexOf(parts[i]);
-      if (parts[i].length > 2 && k >= 0) return k;
+      const w = parts[i].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const hit = new RegExp("\\b" + w + "\\b", "i").exec(title);
+      if (hit && !used.has(hit.index)) {
+        used.add(hit.index);
+        marks.push({ end: hit.index + hit[0].length,
+                     rank: String(r.rank).replace(/^#?/, "#") });
+        break;
+      }
     }
-    return 999;
-  };
-  return list.slice().sort((a, b) => at(a) - at(b))
-    .map((r) => String(r.rank).replace(/^#?/, "#")).join(" vs ");
+  });
+  if (!marks.length) return esc(title);
+  marks.sort((a, b) => b.end - a.end);
+  let out = title;
+  marks.forEach((mk) => {
+    out = out.slice(0, mk.end) + "\u0001" + mk.rank + "\u0002" + out.slice(mk.end);
+  });
+  return esc(out).replace(/\u0001/g, ' <span class="ranks">(')
+                 .replace(/\u0002/g, ")</span>");
 }
 
 function medalBadge(m) {
@@ -289,8 +306,7 @@ function cardHtml(m) {
       `${body}</details>` : "";
   return `<div class="card" id="call-${esc(m.id)}">
     <div class="cardhead">
-      <div class="title">${esc(m.title || "")}${
-        rankSuffix(m) ? `<span class="ranks"> ${esc(rankSuffix(m))}</span>` : ""}</div>
+      <div class="title">${titleWithRanks(m)}</div>
       ${medalBadge(m)}
     </div>
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
@@ -535,7 +551,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "037eab24cfa0";
+const APP_VERSION = "4cd1798f4f8e";
 
 async function checkForUpdate() {
   try {
