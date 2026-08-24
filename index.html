@@ -51,6 +51,27 @@
     border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
     scroll-margin-top: 120px;   /* clears the sticky header when linked to */
   }
+  /* Medals: a real, unpriced edge the analyst found -- rare by design. */
+  .card { position: relative; }
+  .medal {
+    position: absolute; top: 10px; right: 12px; font-size: 10px;
+    font-weight: 800; letter-spacing: .04em; border-radius: 999px;
+    padding: 2px 8px; border: 1px solid;
+  }
+  .medal-gold   { color: #f5c518; border-color: #f5c518;
+                  background: rgba(245,197,24,.12); }
+  .medal-silver { color: #c7cbd1; border-color: #c7cbd1;
+                  background: rgba(199,203,209,.12); }
+  .medal-bronze { color: #cd7f32; border-color: #cd7f32;
+                  background: rgba(205,127,50,.14); }
+  .medal-why {
+    border-left: 3px solid; border-radius: 6px; padding: 8px 10px;
+    margin: 8px 0; font-size: 13px; line-height: 1.45;
+  }
+  .medal-why .why-title { font-weight: 700; font-size: 11px;
+                          letter-spacing: .03em; margin-bottom: 3px; }
+  .medal-why ul { margin: 5px 0 0; padding-left: 17px; }
+  .medal-why li { font-size: 12px; color: var(--dim); margin: 2px 0; }
   .card.flash {
     border-color: var(--accent);
     box-shadow: 0 0 0 2px rgba(184,255,87,.25);
@@ -196,6 +217,26 @@ function commonHtml(co) {
     (rows ? `<table class="form co">${rows}</table>` : "");
 }
 
+const MEDAL_ICON = { gold: "\u{1F947}", silver: "\u{1F948}", bronze: "\u{1F949}" };
+
+function medalBadge(m) {
+  const g = m.edge_grade;
+  return MEDAL_ICON[g]
+    ? `<span class="medal medal-${g}">${MEDAL_ICON[g]} ${g.toUpperCase()}</span>`
+    : "";
+}
+
+function medalWhy(m) {
+  const g = m.edge_grade;
+  if (!MEDAL_ICON[g] || !m.edge_summary) return "";
+  const items = (m.edge_factors || []).map(f =>
+    `<li>${esc(f.factor || "")}${f.detail ? ": " + esc(f.detail) : ""}</li>`
+  ).join("");
+  return `<div class="medal-why medal-${g}">` +
+    `<div class="why-title">${MEDAL_ICON[g]} ${g.toUpperCase()} BET REASONING SUMMARY</div>` +
+    esc(m.edge_summary) + (items ? `<ul>${items}</ul>` : "") + `</div>`;
+}
+
 function cardHtml(m) {
   const live = (m.live_bid != null || m.live_ask != null)
     ? ` · now <b>${cents(m.live_bid)}/${cents(m.live_ask)}</b>` : "";
@@ -214,6 +255,7 @@ function cardHtml(m) {
     ? `<details data-key="${key}-${esc(m.id)}"><summary>${label}</summary>` +
       `${body}</details>` : "";
   return `<div class="card" id="call-${esc(m.id)}">
+    ${medalBadge(m)}
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
                                (m.effort ? " " + m.effort : "") : null]
@@ -224,6 +266,7 @@ function cardHtml(m) {
       ${m.in_play ? '<span class="badge">IN PLAY</span>' : ""}</div>
     <div class="nums">AI <b>${pct(m.prob)}</b> vs <b>${cents(m.price)}</b>${conf}${live}</div>
     ${h2hHtml(m.h2h)}
+    ${medalWhy(m)}
     ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
     ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
     ${fold("co", "common opponents &amp; style matchups", common)}
