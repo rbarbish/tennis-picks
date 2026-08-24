@@ -113,6 +113,13 @@
   .factor { font-size: 12px; margin: 3px 0; }
   .tail { color: var(--dim); font-size: 12px; margin-top: 6px; }
   .logline { font-size: 13px; font-weight: 700; margin: 0 4px 8px; }
+  .logfilter { display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+               margin: 0 4px 8px; font-size: 12px; color: var(--dim);
+               text-transform: none; letter-spacing: 0; }
+  .logfilter select {
+    background: var(--card); color: var(--text); font-size: 12px;
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 6px;
+  }
   .logrow {
     display: flex; justify-content: space-between; gap: 10px;
     padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: 13px;
@@ -164,6 +171,8 @@ const DATA_URL =
   "https://raw.githubusercontent.com/rbarbish/tennis-picks/data/tennis.json";
 const LOG_PAGE = 25;
 let logShown = LOG_PAGE;
+let logMedalOnly = false;
+let logMedalKind = "any";
 let lastPayload = null;
 
 const modelLabel = id => ({ "claude-fable-5": "Fable 5",
@@ -277,7 +286,8 @@ function cardHtml(m) {
 
 function logRowHtml(r) {
   const won = r.won === 1;
-  return `<div class="logrow"><div class="who">${esc(r.title || "")}
+  const icon = MEDAL_ICON[r.edge_grade] ? MEDAL_ICON[r.edge_grade] + " " : "";
+  return `<div class="logrow"><div class="who">${icon}${esc(r.title || "")}
       <div class="sub2">${esc(r.match_date || "")} · ${esc(r.pick || "")}
         · AI ${pct(r.prob)} vs ${cents(r.price)}</div></div>
     <div class="${won ? "res-w" : "res-l"}">${won ? "✓" : "✗"}
@@ -304,7 +314,12 @@ function render(p) {
   const openKeys = new Set([...document.querySelectorAll("details[open]")]
     .map(d => d.dataset.key));
   const matches = (p.open && p.open.matches) || [];
-  const rows = ((p.log && p.log.rows) || []).slice(0, logShown);
+  const all = ((p.log && p.log.rows) || []).filter(r => !logMedalOnly
+    ? true
+    : logMedalKind === "any"
+      ? !!MEDAL_ICON[r.edge_grade]
+      : r.edge_grade === logMedalKind);
+  const rows = all.slice(0, logShown);
   const wins = rows.filter(r => r.won === 1).length;
   const pnl = rows.reduce((a, r) => a + (r.pnl || 0), 0);
   const total = (p.log && p.log.total) || 0;
@@ -314,13 +329,32 @@ function render(p) {
     (matches.length ? matches.map(cardHtml).join("")
       : `<div class="status">No open calls — settled ones are below.</div>`) +
     `<h2>Call log (${total} settled)</h2>` +
+    `<div class="logfilter"><label><input type="checkbox" id="logMedalOnly"` +
+    `${logMedalOnly ? " checked" : ""}> only medal picks</label>` +
+    `<select id="logMedalKind"${logMedalOnly ? "" : " disabled"}>` +
+    ["any::any medal", "gold::🥇 gold only", "silver::🥈 silver only",
+     "bronze::🥉 bronze only"].map(o => {
+       const [v, label] = o.split("::");
+       return `<option value="${v}"${v === logMedalKind ? " selected" : ""}>` +
+              `${label}</option>`;
+     }).join("") + `</select></div>` +
     (rows.length
       ? `<div class="logline">These ${rows.length}: ${wins}W/${rows.length - wins}L
            · <span class="${pnl >= 0 ? "res-w" : "res-l"}">${money(pnl)}</span></div>` +
         rows.map(logRowHtml).join("") +
-        (logShown < ((p.log && p.log.rows) || []).length
+        (logShown < all.length
           ? `<button class="more" onclick="logShown+=${LOG_PAGE};render(lastPayload)">Show more</button>` : "")
-      : "");
+      : `<div class="status">${logMedalOnly
+            ? "No settled medal picks yet — they are rare by design."
+            : "Nothing settled yet."}</div>`);
+  const only = document.getElementById("logMedalOnly");
+  if (only) only.onchange = (e) => {
+    logMedalOnly = e.target.checked; logShown = LOG_PAGE; render(lastPayload);
+  };
+  const kind = document.getElementById("logMedalKind");
+  if (kind) kind.onchange = (e) => {
+    logMedalKind = e.target.value; logShown = LOG_PAGE; render(lastPayload);
+  };
   openKeys.forEach(k => {
     const d = document.querySelector(`details[data-key="${k}"]`);
     if (d) d.open = true;
