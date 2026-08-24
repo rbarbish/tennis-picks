@@ -78,9 +78,13 @@
     transition: border-color .3s, box-shadow .3s;
   }
   .meta { color: var(--dim); font-size: 12px; }
-  .title { font-weight: 700; font-size: 16px; margin: 2px 0 6px; }
-  .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .pick { font-size: 19px; font-weight: 800; color: var(--accent); }
+  .title { font-weight: 800; font-size: 19px; line-height: 1.25;
+           margin: 0 0 3px; }
+  /* Keep the top lines clear of the badge sitting in the corner. */
+  .card.has-medal .title, .card.has-medal .meta { padding-right: 84px; }
+  .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+              margin-top: 6px; }
+  .pick { font-size: 19px; font-weight: 800; color: var(--green); }
   .stake { color: var(--dim); font-weight: 600; }
   .nums { font-size: 13px; color: var(--dim); margin: 3px 0 6px; }
   .nums b { color: var(--text); }
@@ -263,13 +267,14 @@ function cardHtml(m) {
   const fold = (key, label, body) => body
     ? `<details data-key="${key}-${esc(m.id)}"><summary>${label}</summary>` +
       `${body}</details>` : "";
-  return `<div class="card" id="call-${esc(m.id)}">
+  return `<div class="card${MEDAL_ICON[m.edge_grade] ? " has-medal" : ""}"
+       id="call-${esc(m.id)}">
     ${medalBadge(m)}
+    <div class="title">${esc(m.title || "")}</div>
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
                                (m.effort ? " " + m.effort : "") : null]
                             .filter(Boolean).join(" · "))}</div>
-    <div class="title">${esc(m.title || "")}</div>
     <div class="pickline"><span class="pick">PICK: ${esc(m.pick || "?")}</span>
       <span class="stake">$${Math.round(m.stake || 0)}</span>
       ${m.in_play ? '<span class="badge">IN PLAY</span>' : ""}</div>
