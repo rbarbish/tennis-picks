@@ -493,7 +493,10 @@ if ("serviceWorker" in navigator)
       busy = true;
       ptr.style.height = "34px";
       ptr.textContent = "Refreshing…";
-      await refresh();
+      // Pull refreshes the DATA and checks for a new build of the app
+      // itself -- fetching tennis.json alone left Ross staring at a
+      // cached layout that a deploy had already fixed (2026-08-24).
+      await Promise.all([refresh(), checkForUpdate()]);
       busy = false;
     }
     ptr.style.height = "0px";
@@ -505,7 +508,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "2cc95ad01d7a";
+const APP_VERSION = "f43a7c7c42ce";
 
 async function checkForUpdate() {
   try {
