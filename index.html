@@ -51,12 +51,15 @@
     border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
     scroll-margin-top: 120px;   /* clears the sticky header when linked to */
   }
-  /* Medals: a real, unpriced edge the analyst found -- rare by design. */
-  .card { position: relative; }
+  /* Medals: a real, unpriced edge the analyst found -- rare by design.
+     The badge shares a flex row with the matchup rather than floating
+     over it, so it cannot overlap however long the names run. */
+  .cardhead { display: flex; align-items: flex-start; gap: 10px; }
+  .cardhead .title { flex: 1; min-width: 0; }
   .medal {
-    position: absolute; top: 10px; right: 12px; font-size: 10px;
+    flex: 0 0 auto; font-size: 10px; margin-top: 2px;
     font-weight: 800; letter-spacing: .04em; border-radius: 999px;
-    padding: 2px 8px; border: 1px solid;
+    padding: 2px 8px; border: 1px solid; white-space: nowrap;
   }
   .medal-gold   { color: #f5c518; border-color: #f5c518;
                   background: rgba(245,197,24,.12); }
@@ -80,8 +83,6 @@
   .meta { color: var(--dim); font-size: 12px; }
   .title { font-weight: 800; font-size: 19px; line-height: 1.25;
            margin: 0 0 3px; }
-  /* Keep the top lines clear of the badge sitting in the corner. */
-  .card.has-medal .title, .card.has-medal .meta { padding-right: 84px; }
   .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
               margin-top: 6px; }
   .pick { font-size: 19px; font-weight: 800; color: var(--green); }
@@ -267,10 +268,11 @@ function cardHtml(m) {
   const fold = (key, label, body) => body
     ? `<details data-key="${key}-${esc(m.id)}"><summary>${label}</summary>` +
       `${body}</details>` : "";
-  return `<div class="card${MEDAL_ICON[m.edge_grade] ? " has-medal" : ""}"
-       id="call-${esc(m.id)}">
-    ${medalBadge(m)}
-    <div class="title">${esc(m.title || "")}</div>
+  return `<div class="card" id="call-${esc(m.id)}">
+    <div class="cardhead">
+      <div class="title">${esc(m.title || "")}</div>
+      ${medalBadge(m)}
+    </div>
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
                                (m.effort ? " " + m.effort : "") : null]
@@ -497,6 +499,29 @@ if ("serviceWorker" in navigator)
     ptr.style.height = "0px";
   }, { passive: true });
 })();
+
+// ---- Stay current ----
+// iOS caches an installed web app's HTML hard, so a fix can sit deployed
+// while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
+// exactly that). version.txt is written at deploy time from the file's
+// own hash; when it stops matching what this page was built as, reload.
+const APP_VERSION = "2cc95ad01d7a";
+
+async function checkForUpdate() {
+  try {
+    const r = await fetch("version.txt?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const latest = (await r.text()).trim();
+    if (latest && APP_VERSION !== "__APP_VERSION__" && latest !== APP_VERSION) {
+      location.reload();
+    }
+  } catch (e) { /* offline: keep showing what we have */ }
+}
+
+checkForUpdate();
+setInterval(checkForUpdate, 300000);
+document.addEventListener("visibilitychange",
+  () => { if (!document.hidden) checkForUpdate(); });
 
 refresh();
 setInterval(refresh, 60000);
