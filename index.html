@@ -161,6 +161,7 @@
   <div class="record" id="record">Loading…</div>
   <div class="sub" id="updated"></div>
   <div class="scout" id="scout"></div>
+  <div class="scout" id="agents"></div>
 </header>
 <main>
   <div id="content"><div class="status">Fetching latest calls…</div></div>
@@ -328,8 +329,14 @@ function render(p) {
     : "No graded calls yet";
   document.getElementById("updated").textContent = agoLine(p.generated_at);
   const s = (p.open && p.open.scout) || {};
+  const busy = (s.current_list && s.current_list.length)
+    ? s.current_list : (s.current ? [s.current] : []);
+  document.getElementById("agents").innerHTML = busy.map((t, i) =>
+    `<div>agent ${i + 1}: <b>${esc(t)}</b></div>`).join("");
   document.getElementById("scout").textContent = [
-    s.phase === "analyzing" && s.current ? "researching " + s.current : s.phase,
+    s.phase === "analyzing"
+      ? "researching " + busy.length + (busy.length === 1 ? " match" : " matches")
+      : s.phase,
     s.open_count != null
       ? s.open_count + "/" + ((s.settings && s.settings.max_open) || 15) + " slots"
       : null,
@@ -527,7 +534,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "3eb12e15b473";
+const APP_VERSION = "1399af282075";
 
 async function checkForUpdate() {
   try {
