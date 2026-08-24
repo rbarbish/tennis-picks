@@ -83,6 +83,8 @@
   .meta { color: var(--dim); font-size: 12px; }
   .title { font-weight: 800; font-size: 19px; line-height: 1.25;
            margin: 0 0 3px; }
+  .ranks { font-size: 13px; font-weight: 600; color: var(--dim);
+           white-space: nowrap; }
   .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
               margin-top: 6px; }
   .pick { font-size: 19px; font-weight: 800; color: var(--green); }
@@ -233,6 +235,22 @@ function commonHtml(co) {
 
 const MEDAL_ICON = { gold: "\u{1F947}", silver: "\u{1F948}", bronze: "\u{1F949}" };
 
+function rankSuffix(m) {
+  const list = (m.ranks || []).filter((r) => r && r.rank);
+  if (!list.length) return "";
+  const title = (m.title || "").toLowerCase();
+  const at = (r) => {
+    const parts = String(r.player || "").toLowerCase().split(/\s+/);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const k = title.indexOf(parts[i]);
+      if (parts[i].length > 2 && k >= 0) return k;
+    }
+    return 999;
+  };
+  return list.slice().sort((a, b) => at(a) - at(b))
+    .map((r) => String(r.rank).replace(/^#?/, "#")).join(" vs ");
+}
+
 function medalBadge(m) {
   const g = m.edge_grade;
   return MEDAL_ICON[g]
@@ -270,7 +288,8 @@ function cardHtml(m) {
       `${body}</details>` : "";
   return `<div class="card" id="call-${esc(m.id)}">
     <div class="cardhead">
-      <div class="title">${esc(m.title || "")}</div>
+      <div class="title">${esc(m.title || "")}${
+        rankSuffix(m) ? `<span class="ranks"> ${esc(rankSuffix(m))}</span>` : ""}</div>
       ${medalBadge(m)}
     </div>
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
@@ -508,7 +527,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "f43a7c7c42ce";
+const APP_VERSION = "3eb12e15b473";
 
 async function checkForUpdate() {
   try {
