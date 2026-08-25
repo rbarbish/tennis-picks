@@ -181,6 +181,15 @@ const LOG_PAGE = 25;
 let logShown = LOG_PAGE;
 let logMedalOnly = false;
 let logMedalKind = "any";
+// In-play calls flatter the record, so they are out by default
+// (Ross, 2026-08-24).
+let excludeLive = localStorage.getItem("excludeLive") !== "0";
+
+function setExcludeLive(on) {
+  excludeLive = on;
+  localStorage.setItem("excludeLive", on ? "1" : "0");
+  render(lastPayload);
+}
 let lastPayload = null;
 
 const modelLabel = id => ({ "claude-fable-5": "Fable 5",
@@ -338,9 +347,10 @@ function logRowHtml(r) {
 }
 
 function render(p) {
-  const rec = (p.log && p.log.record) || {graded: 0, wins: 0, pnl: 0};
+  const book = (excludeLive && p.log_prematch) ? p.log_prematch : p.log;
+  const rec = (book && book.record) || {graded: 0, wins: 0, pnl: 0};
   document.getElementById("record").innerHTML = rec.graded
-    ? `${rec.wins}/${rec.graded} calls right · ` +
+    ? `${rec.wins}/${rec.graded} ${excludeLive ? "prematch " : ""}calls right · ` +
       `<span class="${rec.pnl >= 0 ? "pnl-pos" : "pnl-neg"}">as-if ${money(rec.pnl)}</span>`
     : "No graded calls yet";
   document.getElementById("updated").textContent = agoLine(p.generated_at);
@@ -364,7 +374,7 @@ function render(p) {
   const openKeys = new Set([...document.querySelectorAll("details[open]")]
     .map(d => d.dataset.key));
   const matches = (p.open && p.open.matches) || [];
-  const all = ((p.log && p.log.rows) || []).filter(r => !logMedalOnly
+  const all = ((book && book.rows) || []).filter(r => !logMedalOnly
     ? true
     : logMedalKind === "any"
       ? !!MEDAL_ICON[r.edge_grade]
@@ -372,14 +382,16 @@ function render(p) {
   const rows = all.slice(0, logShown);
   const wins = rows.filter(r => r.won === 1).length;
   const pnl = rows.reduce((a, r) => a + (r.pnl || 0), 0);
-  const total = (p.log && p.log.total) || 0;
+  const total = (book && book.total) || 0;
 
   document.getElementById("content").innerHTML =
     `<h2>Open calls (${matches.length})</h2>` +
     (matches.length ? matches.map(cardHtml).join("")
       : `<div class="status">No open calls — settled ones are below.</div>`) +
     `<h2>Call log (${total} settled)</h2>` +
-    `<div class="logfilter"><label><input type="checkbox" id="logMedalOnly"` +
+    `<div class="logfilter"><label><input type="checkbox" id="logExcludeLive"` +
+    `${excludeLive ? " checked" : ""}> exclude in-play calls</label>` +
+    `<label><input type="checkbox" id="logMedalOnly"` +
     `${logMedalOnly ? " checked" : ""}> only medal picks</label>` +
     `<select id="logMedalKind"${logMedalOnly ? "" : " disabled"}>` +
     ["any::any medal", "gold::🥇 gold only", "silver::🥈 silver only",
@@ -397,6 +409,8 @@ function render(p) {
       : `<div class="status">${logMedalOnly
             ? "No settled medal picks yet — they are rare by design."
             : "Nothing settled yet."}</div>`);
+  const live = document.getElementById("logExcludeLive");
+  if (live) live.onchange = (e) => { logShown = LOG_PAGE; setExcludeLive(e.target.checked); };
   const only = document.getElementById("logMedalOnly");
   if (only) only.onchange = (e) => {
     logMedalOnly = e.target.checked; logShown = LOG_PAGE; render(lastPayload);
@@ -551,7 +565,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "4cd1798f4f8e";
+const APP_VERSION = "dc25d1e8cd2c";
 
 async function checkForUpdate() {
   try {
