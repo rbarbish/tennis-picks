@@ -85,6 +85,9 @@
            margin: 0 0 3px; }
   .ranks { font-size: 13px; font-weight: 600; color: var(--dim);
            white-space: nowrap; }
+  .timing { font-size: 12px; font-weight: 700; margin: 1px 0 2px; }
+  .timing .prematch { color: var(--green); }
+  .timing .underway { color: #fbbf24; }
   .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
               margin-top: 6px; }
   .pick { font-size: 19px; font-weight: 800; color: var(--green); }
@@ -245,6 +248,28 @@ function commonHtml(co) {
 
 const MEDAL_ICON = { gold: "\u{1F947}", silver: "\u{1F948}", bronze: "\u{1F949}" };
 
+function startsAt(m) {
+  // Prefer the scheduled start; older rows can be reconstructed from the
+  // call time and how far into the match it was made.
+  if (m.start) return new Date(m.start);
+  if (m.at && m.minutes_after_start != null)
+    return new Date(new Date(m.at).getTime() - m.minutes_after_start * 60000);
+  return null;
+}
+
+function timing(m) {
+  const at = startsAt(m);
+  if (!at || isNaN(at)) return "";
+  const mins = Math.round((at - Date.now()) / 60000);
+  const span = (n) => n >= 60
+    ? Math.floor(n / 60) + "h " + (n % 60) + "m" : n + "m";
+  // A card sits here until the match settles, so "called 19h ago" is not
+  // the same as "still prematch" (Ross, 2026-08-26).
+  return mins > 0
+    ? '<span class="prematch">starts in ' + span(mins) + "</span>"
+    : '<span class="underway">UNDER WAY · ' + span(-mins) + " in</span>";
+}
+
 function titleWithRanks(m) {
   const title = m.title || "";
   const list = (m.ranks || []).filter((r) => r && r.rank);
@@ -318,6 +343,7 @@ function cardHtml(m) {
       <div class="title">${titleWithRanks(m)}</div>
       ${medalBadge(m)}
     </div>
+    ${timing(m) ? `<div class="timing">${timing(m)}</div>` : ""}
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
                                (m.effort ? " " + m.effort : "") : null]
@@ -565,7 +591,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "dc25d1e8cd2c";
+const APP_VERSION = "2767cfd318b2";
 
 async function checkForUpdate() {
   try {
