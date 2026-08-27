@@ -394,7 +394,9 @@ function render(p) {
       ? s.open_count + "/" + ((s.settings && s.settings.max_open) || 15) + " slots"
       : null,
     s.count_24h != null ? s.count_24h + " in 24h" : null,
-    s.model, s.error ? "⚠ " + s.error : null,
+    s.model,
+    s.broker_flag === false ? "⚠ Coinbase flag down — analyzing all listings" : null,
+    s.error ? "⚠ " + s.error : null,
   ].filter(Boolean).join(" · ");
 
   const openKeys = new Set([...document.querySelectorAll("details[open]")]
@@ -591,7 +593,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "2767cfd318b2";
+const APP_VERSION = "3a0806ed5303";
 
 async function checkForUpdate() {
   try {
