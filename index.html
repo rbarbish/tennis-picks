@@ -415,7 +415,6 @@ function render(p) {
       : null,
     s.count_24h != null ? s.count_24h + " in 24h" : null,
     s.model,
-    s.broker_flag === false ? "⚠ Coinbase flag down — analyzing all listings" : null,
     s.error ? "⚠ " + s.error : null,
   ].filter(Boolean).join(" · ");
 
@@ -613,7 +612,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "1045c3d36b14";
+const APP_VERSION = "2dfa4b46e3d0";
 
 async function checkForUpdate() {
   try {
