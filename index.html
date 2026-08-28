@@ -321,6 +321,24 @@ function medalWhy(m) {
     esc(m.edge_summary) + (items ? `<ul>${items}</ul>` : "") + `</div>`;
 }
 
+function transitiveHtml(t) {
+  if (!t || (!t.summary && !(t.chains || []).length)) return "";
+  const pct = t.strength != null ? Math.round(t.strength * 100) : null;
+  const even = !t.edge || String(t.edge).toLowerCase() === "even";
+  const rows = (t.chains || []).map(c =>
+    `<tr><td class="who"><b>${esc(c.opponent || "")}</b>` +
+    (c.surface ? `<div class="note">${esc(c.surface)}</div>` : "") +
+    `</td><td>${esc(c.a_result || "")}<br>${esc(c.b_result || "")}` +
+    (c.note ? `<div class="note">${esc(c.note)}</div>` : "") +
+    `<div class="note">favours ${esc(c.favors || "?")}` +
+    (c.weight ? ` · ${esc(c.weight)}` : "") + `</div></td></tr>`).join("");
+  return `<div class="form-player">` +
+    (even ? "Chains are even" : `Edge: ${esc(t.edge)}`) +
+    (pct != null ? ` (${pct}%)` : "") + `</div>` +
+    (t.summary ? `<div class="form-sum">${esc(t.summary)}</div>` : "") +
+    (rows ? `<table class="form co">${rows}</table>` : "");
+}
+
 function cardHtml(m) {
   const live = (m.live_bid != null || m.live_ask != null)
     ? ` · now <b>${cents(m.live_bid)}/${cents(m.live_ask)}</b>` : "";
@@ -330,6 +348,7 @@ function cardHtml(m) {
     `<div class="factor">• <b>${esc(f.factor || "")}</b>: ` +
     `${esc(f.lean || "")}${f.note ? " — " + esc(f.note) : ""}</div>`).join("");
   const common = commonHtml(m.common_opponents);
+  const trans = transitiveHtml(m.transitive);
   const form = formHtml(m.recent_form);
   const tail = m.tail_risk
     ? `<div class="tail">Tail risk: ${esc(m.tail_risk)}</div>` : "";
@@ -356,6 +375,7 @@ function cardHtml(m) {
     ${medalWhy(m)}
     ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
     ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
+    ${fold("tr", "transitive wins &amp; losses", trans)}
     ${fold("co", "common opponents &amp; style matchups", common)}
     ${fold("form", "recent form · last 5 matches", form)}
     ${fold("fx", "factors &amp; tail risk", factors + tail)}
@@ -593,7 +613,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "3a0806ed5303";
+const APP_VERSION = "1045c3d36b14";
 
 async function checkForUpdate() {
   try {
