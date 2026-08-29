@@ -260,15 +260,25 @@ function startsAt(m) {
 function timing(m) {
   const at = startsAt(m);
   if (!at || isNaN(at)) return "";
+  return '<span class="timing-live" data-start="' + at.toISOString() + '">' +
+         timingText(at) + "</span>";
+}
+
+function timingText(at) {
   const mins = Math.round((at - Date.now()) / 60000);
   const span = (n) => n >= 60
     ? Math.floor(n / 60) + "h " + (n % 60) + "m" : n + "m";
-  // A card sits here until the match settles, so "called 19h ago" is not
-  // the same as "still prematch" (Ross, 2026-08-26).
   return mins > 0
     ? '<span class="prematch">starts in ' + span(mins) + "</span>"
     : '<span class="underway">UNDER WAY · ' + span(-mins) + " in</span>";
 }
+
+setInterval(() => {
+  document.querySelectorAll(".timing-live").forEach((el) => {
+    const at = new Date(el.dataset.start);
+    if (!isNaN(at)) el.innerHTML = timingText(at);
+  });
+}, 30000);
 
 function titleWithRanks(m) {
   const title = m.title || "";
@@ -612,7 +622,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "58b5c6441af7";
+const APP_VERSION = "fa04b0c63d9a";
 
 async function checkForUpdate() {
   try {
