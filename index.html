@@ -88,6 +88,7 @@
   .timing { font-size: 12px; font-weight: 700; margin: 1px 0 2px; }
   .timing .prematch { color: var(--green); }
   .timing .underway { color: #fbbf24; }
+  .timing .approx { color: var(--dim); font-weight: 600; }
   .pickline { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
               margin-top: 6px; }
   .pick { font-size: 19px; font-weight: 800; color: var(--green); }
@@ -260,23 +261,34 @@ function startsAt(m) {
 function timing(m) {
   const at = startsAt(m);
   if (!at || isNaN(at)) return "";
-  return '<span class="timing-live" data-start="' + at.toISOString() + '">' +
-         timingText(at) + "</span>";
+  // Kalshi's listed time is a placeholder and has been a full day wrong;
+  // only an analyst-verified start earns a confident countdown.
+  const sure = m.start_source === "verified";
+  return '<span class="timing-live" data-start="' + at.toISOString() +
+         '" data-sure="' + (sure ? "1" : "0") + '">' +
+         timingText(at, sure) + "</span>";
 }
 
-function timingText(at) {
+function timingText(at, sure) {
   const mins = Math.round((at - Date.now()) / 60000);
   const span = (n) => n >= 60
     ? Math.floor(n / 60) + "h " + (n % 60) + "m" : n + "m";
-  return mins > 0
-    ? '<span class="prematch">starts in ' + span(mins) + "</span>"
-    : '<span class="underway">UNDER WAY · ' + span(-mins) + " in</span>";
+  if (mins > 0) {
+    return sure
+      ? '<span class="prematch">starts in ' + span(mins) + "</span>"
+      : '<span class="prematch">starts in ~' + span(mins) +
+        '</span> <span class="approx">(listed time, unverified)</span>';
+  }
+  return sure
+    ? '<span class="underway">UNDER WAY · ' + span(-mins) + " in</span>"
+    : '<span class="approx">listed start passed ' + span(-mins) +
+      " ago — check the draw</span>";
 }
 
 setInterval(() => {
   document.querySelectorAll(".timing-live").forEach((el) => {
     const at = new Date(el.dataset.start);
-    if (!isNaN(at)) el.innerHTML = timingText(at);
+    if (!isNaN(at)) el.innerHTML = timingText(at, el.dataset.sure === "1");
   });
 }, 30000);
 
@@ -622,7 +634,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "fa04b0c63d9a";
+const APP_VERSION = "a7deb9f3d88d";
 
 async function checkForUpdate() {
   try {
