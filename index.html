@@ -196,7 +196,8 @@ function setExcludeLive(on) {
 }
 let lastPayload = null;
 
-const modelLabel = id => ({ "claude-fable-5": "Fable 5",
+const modelLabel = id => ({ "claude-fable-5-1": "Fable 5.1",
+  "claude-fable-5": "Fable 5",
   "claude-opus-5": "Opus 5", "claude-sonnet-5": "Sonnet 5" }[id] || id);
 const esc = s => String(s ?? "").replace(/[&<>"]/g,
   c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -634,7 +635,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "a7deb9f3d88d";
+const APP_VERSION = "69a9b5fdae96";
 
 async function checkForUpdate() {
   try {
