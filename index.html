@@ -250,6 +250,17 @@ function commonHtml(co) {
 
 const MEDAL_ICON = { gold: "\u{1F947}", silver: "\u{1F948}", bronze: "\u{1F949}" };
 
+function analysisCompleted(m) {
+  const value = m.analysis_completed_at || m.at;
+  if (!value) return "";
+  const at = new Date(value);
+  if (isNaN(at.getTime())) return "";
+  return "Analysis completed · " + at.toLocaleString(undefined, {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short"
+  });
+}
+
 function startsAt(m) {
   // Prefer the scheduled start; older rows can be reconstructed from the
   // call time and how far into the match it was made.
@@ -385,6 +396,7 @@ function cardHtml(m) {
       <div class="title">${titleWithRanks(m)}</div>
       ${medalBadge(m)}
     </div>
+    ${analysisCompleted(m) ? `<div class="meta analysis-completed">${esc(analysisCompleted(m))}</div>` : ""}
     ${timing(m) ? `<div class="timing">${timing(m)}</div>` : ""}
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
@@ -635,7 +647,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "69a9b5fdae96";
+const APP_VERSION = "933f8d44d232";
 
 async function checkForUpdate() {
   try {
