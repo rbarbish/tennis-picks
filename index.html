@@ -347,8 +347,8 @@ function laneView(s, generatedAt, now = Date.now()) {
   if (agents.length) return {active: true, agents: agents, label: "Active · " + agents.length + " analysis worker" + (agents.length === 1 ? "" : "s")};
   const label = {sweeping: "Active · scanning matches", publishing: "Active · publishing",
     analyzing: "Active · researching", starting: "Starting lane"}[s.phase];
-  return {active: !!label, agents: [], label: label || (s.prematch_status && s.prematch_status.decision !== "verified"
-    ? "Waiting · external prematch verification required" : "Lane on · waiting for eligible matches")};
+  return {active: !!label, agents: [], label: label || (s.prematch_status && s.prematch_status.decision === "blocked"
+    ? "Waiting · confirmed started match skipped" : "Lane on · waiting for eligible matches")};
 }
 function stageLabel(stage) {
   return {verifying_before: "checking external scoreboards", researching: "prediction research",
@@ -358,7 +358,8 @@ function recommendationActive(m, now = Date.now()) {
   const heartbeat = Date.parse(m.lane_heartbeat_at || "");
   return m.lane_enabled === true && Number.isFinite(heartbeat) && now - heartbeat <= 120000 &&
     m.result == null && m.bet_recommended === true && m.recommendation_status === "active" &&
-    Number.isFinite(Date.parse(m.recommendation_expires_at || "")) && Date.parse(m.recommendation_expires_at) > now;
+    (m.prematch_verification?.policy_version === "sofascore-started-only-v1" ||
+      (Number.isFinite(Date.parse(m.recommendation_expires_at || "")) && Date.parse(m.recommendation_expires_at) > now));
 }
 function recommendationNote(m) {
   if (m.result != null || recommendationActive(m)) return "";
@@ -502,7 +503,7 @@ function render(p) {
       : `<div class="status">No open calls — settled ones are below.</div>`) +
     `<h2>Call log (${total} settled)</h2>` +
     `<div class="logfilter"><label><input type="checkbox" id="logExcludeLive"` +
-    `${excludeLive ? " checked" : ""}> verified prematch calls only</label>` +
+    `${excludeLive ? " checked" : ""}> status-screened calls only</label>` +
     `<label><input type="checkbox" id="logMedalOnly"` +
     `${logMedalOnly ? " checked" : ""}> only medal picks</label>` +
     `<select id="logMedalKind"${logMedalOnly ? "" : " disabled"}>` +
@@ -678,14 +679,14 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "e489865b420e";
+const APP_VERSION = "f0470db4c803";
 
 async function checkForUpdate() {
   try {
     const r = await fetch("version.txt?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return;
     const latest = (await r.text()).trim();
-    if (latest && APP_VERSION !== "e489865b420e" && latest !== APP_VERSION) {
+    if (latest && APP_VERSION !== "f0470db4c803" && latest !== APP_VERSION) {
       location.reload();
     }
   } catch (e) { /* offline: keep showing what we have */ }
