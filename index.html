@@ -358,20 +358,39 @@ function recommendationActive(m, now = Date.now()) {
   const heartbeat = Date.parse(m.lane_heartbeat_at || "");
   return m.lane_enabled === true && Number.isFinite(heartbeat) && now - heartbeat <= 120000 &&
     m.result == null && m.bet_recommended === true && m.recommendation_status === "active" &&
-    (m.prematch_verification?.policy_version === "sofascore-started-only-v1" ||
+    (["sofascore-started-only-v1", "external-started-only-v2"].includes(m.prematch_verification?.policy_version) ||
       (Number.isFinite(Date.parse(m.recommendation_expires_at || "")) && Date.parse(m.recommendation_expires_at) > now));
 }
 function recommendationNote(m) {
   if (m.result != null || recommendationActive(m)) return "";
+  if (m.recommendation_status === "forecast") return "FORECAST ONLY · no recommended bet at the analyzed price";
+  if (m.recommendation_status === "started") return "NO BET · match status check confirmed play or blocked this event";
   if (m.lane_enabled !== true || !Number.isFinite(Date.parse(m.lane_heartbeat_at || "")) ||
       Date.now() - Date.parse(m.lane_heartbeat_at) > 120000) return "NOT ACTIONABLE · lane off or server heartbeat stale";
-  return m.recommendation_status === "unverified" || !m.recommendation_expires_at
-    ? "NOT ACTIONABLE · external prematch status was not verified"
+  return m.recommendation_status === "unverified"
+    ? "HISTORICAL CALL · no current recommendation under the active status policy"
     : "NOT ACTIONABLE · recommendation expired; a fresh status and price check is required";
+}
+function matchStatusHtml(m) {
+  const c = m.match_status || m.prematch_verification;
+  if (!c) return '<div class="meta">Match status: no recorded check</div>';
+  const escape = typeof escT === "function" ? escT : esc;
+  const label = c.decision === "checked" || c.decision === "verified"
+    ? "Not started at check" : c.decision === "blocked" ? "Status check blocked this event" : "Status unknown at check · analysis allowed";
+  const at = c.checked_at || c.verified_at;
+  const stamp = at && Number.isFinite(Date.parse(at)) ? new Date(at).toLocaleString() : "time unavailable";
+  const urls = [...new Set((c.sources || []).map(s => s.url).filter(u => /^https:\/\//i.test(u || "")))];
+  const links = urls.slice(0, 3).map(u => {
+    try { return '<a href="' + escape(u) + '" target="_blank" rel="noopener noreferrer">' + escape(new URL(u).hostname.replace(/^www\./, "")) + '</a>'; }
+    catch (_) { return ""; }
+  }).filter(Boolean).join(" · ");
+  return '<div class="meta match-status">' + escape(label) + ' · ' + escape(stamp) +
+    (links ? ' · ' + links : '') + '</div>';
 }
 // End shared sports lane status.
 
 function medalBadge(m) {
+  if (m.result == null && m.recommendation_status === "forecast") return '<span class="meta">NO BET</span>';
   if (m.result == null && !recommendationActive(m)) return '<span class="meta">NOT ACTIONABLE</span>';
   const g = m.edge_grade;
   return MEDAL_ICON[g]
@@ -434,6 +453,7 @@ function cardHtml(m) {
     </div>
     ${analysisCompleted(m) ? `<div class="meta analysis-completed">${esc(analysisCompleted(m))}</div>` : ""}
     ${timing(m) ? `<div class="timing">${timing(m)}</div>` : ""}
+    ${matchStatusHtml(m)}
     <div class="meta">${esc([m.tour, m.tournament, m.match_date,
                              m.model ? modelLabel(m.model) +
                                (m.effort ? " " + m.effort : "") : null]
@@ -443,7 +463,7 @@ function cardHtml(m) {
       ${m.in_play ? '<span class="badge">IN PLAY</span>' : ""}</div>
     <div class="nums">AI <b>${pct(m.prob)}</b> vs <b>${cents(m.price)}</b>${conf}${live}</div>
     ${h2hHtml(m.h2h)}
-    ${m.bet_recommended === false ? `<div class="meta">Forecast only · no recommended bet at this price</div>` : ""}
+    ${m.recommendation_status === "forecast" ? `<div class="meta">Forecast only · no recommended bet at this price</div>` : ""}
     ${medalWhy(m)}
     ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
     ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
@@ -679,14 +699,14 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "f0470db4c803";
+const APP_VERSION = "ee35352337a6";
 
 async function checkForUpdate() {
   try {
     const r = await fetch("version.txt?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return;
     const latest = (await r.text()).trim();
-    if (latest && APP_VERSION !== "f0470db4c803" && latest !== APP_VERSION) {
+    if (latest && APP_VERSION !== "ee35352337a6" && latest !== APP_VERSION) {
       location.reload();
     }
   } catch (e) { /* offline: keep showing what we have */ }
