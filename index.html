@@ -51,7 +51,7 @@
     border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
     scroll-margin-top: 120px;   /* clears the sticky header when linked to */
   }
-  /* Medals: a real, unpriced edge the analyst found -- rare by design.
+  /* Medals: a real, unpriced edge the analyst found -- ranked by probability and value.
      The badge shares a flex row with the matchup rather than floating
      over it, so it cannot overlap however long the names run. */
   .cardhead { display: flex; align-items: flex-start; gap: 10px; }
@@ -337,7 +337,41 @@ function titleWithRanks(m) {
                  .replace(/\u0002/g, ")</span>");
 }
 
+// Shared sports lane status: freshness is based on server heartbeat, not fetch time.
+function laneView(s, generatedAt, now = Date.now()) {
+  const stamp = Date.parse(s.heartbeat_at || generatedAt || s.updated_at || "");
+  const fresh = Number.isFinite(stamp) && now - stamp >= -10000 && now - stamp <= 120000;
+  if (!fresh) return {active: false, agents: [], label: "Status stale / server offline — no current bet recommendations"};
+  const agents = s.agents || [];
+  if (s.enabled === false) return {active: false, agents: [], label: "Lane off"};
+  if (agents.length) return {active: true, agents: agents, label: "Active · " + agents.length + " analysis worker" + (agents.length === 1 ? "" : "s")};
+  const label = {sweeping: "Active · scanning matches", publishing: "Active · publishing",
+    analyzing: "Active · researching", starting: "Starting lane"}[s.phase];
+  return {active: !!label, agents: [], label: label || (s.prematch_status && s.prematch_status.decision !== "verified"
+    ? "Waiting · external prematch verification required" : "Lane on · waiting for eligible matches")};
+}
+function stageLabel(stage) {
+  return {verifying_before: "checking external scoreboards", researching: "prediction research",
+    verifying_after: "final external status check", publishing: "publishing"}[stage] || stage || "starting";
+}
+function recommendationActive(m, now = Date.now()) {
+  const heartbeat = Date.parse(m.lane_heartbeat_at || "");
+  return m.lane_enabled === true && Number.isFinite(heartbeat) && now - heartbeat <= 120000 &&
+    m.result == null && m.bet_recommended === true && m.recommendation_status === "active" &&
+    Number.isFinite(Date.parse(m.recommendation_expires_at || "")) && Date.parse(m.recommendation_expires_at) > now;
+}
+function recommendationNote(m) {
+  if (m.result != null || recommendationActive(m)) return "";
+  if (m.lane_enabled !== true || !Number.isFinite(Date.parse(m.lane_heartbeat_at || "")) ||
+      Date.now() - Date.parse(m.lane_heartbeat_at) > 120000) return "NOT ACTIONABLE · lane off or server heartbeat stale";
+  return m.recommendation_status === "unverified" || !m.recommendation_expires_at
+    ? "NOT ACTIONABLE · external prematch status was not verified"
+    : "NOT ACTIONABLE · recommendation expired; a fresh status and price check is required";
+}
+// End shared sports lane status.
+
 function medalBadge(m) {
+  if (m.result == null && !recommendationActive(m)) return '<span class="meta">NOT ACTIONABLE</span>';
   const g = m.edge_grade;
   return MEDAL_ICON[g]
     ? `<span class="medal medal-${g}">${MEDAL_ICON[g]} ${g.toUpperCase()}</span>`
@@ -345,6 +379,7 @@ function medalBadge(m) {
 }
 
 function medalWhy(m) {
+  if (recommendationNote(m)) return '<div class="meta">' + esc(recommendationNote(m)) + "</div>";
   const g = m.edge_grade;
   if (!MEDAL_ICON[g] || !m.edge_summary) return "";
   const items = (m.edge_factors || []).map(f =>
@@ -376,8 +411,8 @@ function transitiveHtml(t) {
 function cardHtml(m) {
   const live = (m.live_bid != null || m.live_ask != null)
     ? ` · now <b>${cents(m.live_bid)}/${cents(m.live_ask)}</b>` : "";
-  const conf = m.confidence != null
-    ? ` · conf <b>${pct(m.confidence)}</b>` : "";
+  const conf = m.research_confidence != null
+    ? ` · research <b>${pct(m.research_confidence)}</b>` : "";
   const factors = (m.key_factors || []).map(f =>
     `<div class="factor">• <b>${esc(f.factor || "")}</b>: ` +
     `${esc(f.lean || "")}${f.note ? " — " + esc(f.note) : ""}</div>`).join("");
@@ -403,10 +438,11 @@ function cardHtml(m) {
                                (m.effort ? " " + m.effort : "") : null]
                             .filter(Boolean).join(" · "))}</div>
     <div class="pickline"><span class="pick">PICK: ${esc(m.pick || "?")}</span>
-      <span class="stake">$${Math.round(m.stake || 0)}</span>
+      <span class="stake">$${Math.round((m.result == null ? (recommendationActive(m) ? m.recommended_stake : 0) : m.stake) || 0)}</span>
       ${m.in_play ? '<span class="badge">IN PLAY</span>' : ""}</div>
     <div class="nums">AI <b>${pct(m.prob)}</b> vs <b>${cents(m.price)}</b>${conf}${live}</div>
     ${h2hHtml(m.h2h)}
+    ${m.bet_recommended === false ? `<div class="meta">Forecast only · no recommended bet at this price</div>` : ""}
     ${medalWhy(m)}
     ${m.headline ? `<div class="headline">${esc(m.headline)}</div>` : ""}
     ${m.analysis ? `<div class="analysis">${esc(m.analysis)}</div>` : ""}
@@ -434,24 +470,18 @@ function render(p) {
     ? `${rec.wins}/${rec.graded} ${excludeLive ? "prematch " : ""}calls right · ` +
       `<span class="${rec.pnl >= 0 ? "pnl-pos" : "pnl-neg"}">as-if ${money(rec.pnl)}</span>`
     : "No graded calls yet";
+  const medals = p.open && p.open.current_medal_record;
+  if (medals) document.getElementById("record").innerHTML +=
+    `<div class="meta">New medal bets: ${medals.wins}/${medals.graded} won · as-if ${money(medals.pnl)}` +
+    (medals.roi != null ? ` · ${(medals.roi*100).toFixed(1)}% ROI` : "") + `</div>`;
   document.getElementById("updated").textContent = agoLine(p.generated_at);
   const s = (p.open && p.open.scout) || {};
-  const busy = (s.current_list && s.current_list.length)
-    ? s.current_list
-    : (s.current ? String(s.current).split(" + ") : []);
-  document.getElementById("agents").innerHTML = busy.map((t, i) =>
-    `<div>agent ${i + 1}: <b>${esc(t)}</b></div>`).join("");
-  document.getElementById("scout").textContent = [
-    s.phase === "analyzing"
-      ? "researching " + busy.length + (busy.length === 1 ? " match" : " matches")
-      : s.phase,
-    s.open_count != null
-      ? s.open_count + "/" + ((s.settings && s.settings.max_open) || 15) + " slots"
-      : null,
-    s.count_24h != null ? s.count_24h + " in 24h" : null,
-    s.model,
-    s.error ? "⚠ " + s.error : null,
-  ].filter(Boolean).join(" · ");
+  const lane = laneView(s, p.generated_at);
+  document.getElementById("agents").innerHTML = lane.agents.map((a, i) =>
+    `<div>worker ${i+1}: <b>${esc(a.title || "")}</b> · ${esc(stageLabel(a.stage))}` +
+    (a.model ? ` · ${esc(a.model)}` : "") + `</div>`).join("");
+  document.getElementById("scout").textContent = [lane.label, s.error || null].filter(Boolean).join(" · ");
+  document.getElementById("scout").style.color = lane.active ? "var(--green)" : "var(--dim)";
 
   const openKeys = new Set([...document.querySelectorAll("details[open]")]
     .map(d => d.dataset.key));
@@ -472,7 +502,7 @@ function render(p) {
       : `<div class="status">No open calls — settled ones are below.</div>`) +
     `<h2>Call log (${total} settled)</h2>` +
     `<div class="logfilter"><label><input type="checkbox" id="logExcludeLive"` +
-    `${excludeLive ? " checked" : ""}> exclude in-play calls</label>` +
+    `${excludeLive ? " checked" : ""}> verified prematch calls only</label>` +
     `<label><input type="checkbox" id="logMedalOnly"` +
     `${logMedalOnly ? " checked" : ""}> only medal picks</label>` +
     `<select id="logMedalKind"${logMedalOnly ? "" : " disabled"}>` +
@@ -489,7 +519,7 @@ function render(p) {
         (logShown < all.length
           ? `<button class="more" onclick="logShown+=${LOG_PAGE};render(lastPayload)">Show more</button>` : "")
       : `<div class="status">${logMedalOnly
-            ? "No settled medal picks yet — they are rare by design."
+            ? "No settled medal picks yet. Grades reflect win probability and value."
             : "Nothing settled yet."}</div>`);
   const live = document.getElementById("logExcludeLive");
   if (live) live.onchange = (e) => { logShown = LOG_PAGE; setExcludeLive(e.target.checked); };
@@ -534,6 +564,7 @@ async function refresh() {
     lastPayload = await r.json();
     render(lastPayload);
   } catch (e) {
+    if (lastPayload) render(lastPayload); // age out stale activity even when fetch fails
     if (!lastPayload)
       document.getElementById("content").innerHTML =
         `<div class="status">Couldn’t fetch data (${esc(e.message)}).
@@ -647,14 +678,14 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "933f8d44d232";
+const APP_VERSION = "e489865b420e";
 
 async function checkForUpdate() {
   try {
     const r = await fetch("version.txt?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return;
     const latest = (await r.text()).trim();
-    if (latest && APP_VERSION !== "__APP_VERSION__" && latest !== APP_VERSION) {
+    if (latest && APP_VERSION !== "e489865b420e" && latest !== APP_VERSION) {
       location.reload();
     }
   } catch (e) { /* offline: keep showing what we have */ }
@@ -666,7 +697,7 @@ document.addEventListener("visibilitychange",
   () => { if (!document.hidden) checkForUpdate(); });
 
 refresh();
-setInterval(refresh, 60000);
+setInterval(refresh, 15000);
 document.addEventListener("visibilitychange",
   () => { if (!document.hidden) refresh(); });
 </script>
