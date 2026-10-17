@@ -46,6 +46,34 @@
   main { padding: 10px 12px 40px; max-width: 640px; margin: 0 auto; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
        color: var(--dim); margin: 18px 4px 8px; }
+
+  /* Ranked bets: take from the top, skip the bottom. */
+  .rt { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .rt th { text-align: left; font-size: 10px; font-weight: 700;
+           color: var(--dim); letter-spacing: .05em; padding: 0 5px 6px;
+           border-bottom: 1px solid var(--line); }
+  .rt td { padding: 7px 5px; border-bottom: 1px solid var(--line);
+           vertical-align: top; }
+  .rt tr:last-child td { border-bottom: none; }
+  .rt .n { text-align: right; font-variant-numeric: tabular-nums;
+           white-space: nowrap; }
+  .rt .seq { color: var(--dim); }
+  .rt .mu { font-weight: 600; }
+  .rt .pk { color: var(--green); font-size: 11px; }
+  .rt .wy { color: var(--dim); font-size: 10px; }
+  .bd { display: inline-block; padding: 1px 6px; border-radius: 999px;
+        font-size: 9px; font-weight: 800; letter-spacing: .05em;
+        white-space: nowrap; }
+  .bd-TAKE { background: #14532d; color: #86efac; }
+  .bd-LEAN { background: #163b4d; color: #7dd3fc; }
+  .bd-THIN { background: #333d36; color: #c7d2cb; }
+  .bd-PASS { background: #43100f; color: #fca5a5; }
+  .bd-NOBOOK { background: #242b26; color: var(--dim); }
+  .sc-pos { color: var(--green); font-weight: 700; }
+  .sc-neg { color: var(--red); }
+  .rt .divider td { padding: 4px 5px; font-size: 9px; letter-spacing: .06em;
+                    color: var(--dim); background: rgba(0,0,0,.25);
+                    text-transform: uppercase; }
   .card {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 12px; padding: 12px 14px; margin-bottom: 10px;
@@ -361,6 +389,67 @@ function transitiveHtml(t) {
     (rows ? `<table class="form co">${rows}</table>` : "");
 }
 
+// Every open call in one order, scored server-side on this lane's own
+// settled record (btc15m/ranking.py): expected cents back per dollar at
+// risk, after fees. Finished matches are already gone from the payload.
+function rankCents(v) {
+  if (v === null || v === undefined) return "\u2014";
+  return (v > 0 ? "+" : "") + v.toFixed(1) + "\u00A2";
+}
+
+function rankWhy(m) {
+  const r = m.ranking || {};
+  const bits = [];
+  if (r.edge_cents !== null && r.edge_cents !== undefined) {
+    bits.push(rankCents(r.edge_cents) + " vs price");
+  }
+  (r.reasons || []).forEach(w => {
+    if (w.what === "medal") { if (w.value !== "none") bits.push(w.value); }
+    else if (w.what === "factors") {
+      bits.push(w.value + " factor" + (w.value === "1" ? "" : "s"));
+    } else if (w.what === "tour" && w.points <= -2) {
+      bits.push(w.value + " cold");
+    }
+  });
+  return bits.join(" \u00B7 ");
+}
+
+function rankTableHtml(matches) {
+  if (!matches.length) return "";
+  let last = null;
+  const body = matches.map(m => {
+    const r = m.ranking || {};
+    const band = r.band || "NO BOOK";
+    let div = "";
+    if (band !== last) {
+      last = band;
+      div = `<tr class="divider"><td colspan="5">${esc(band)} \u2014 ` +
+            `${esc(r.band_note || "")}</td></tr>`;
+    }
+    const price = (r.price_used === null || r.price_used === undefined)
+      ? "\u2014" : Math.round(100 * r.price_used) + "\u00A2";
+    return div +
+      `<tr><td class="seq n">${r.rank}</td>` +
+      `<td><span class="bd bd-${esc(band.replace(" ", ""))}">` +
+        `${esc(band)}</span></td>` +
+      `<td class="n ${(r.score || 0) > 0 ? "sc-pos" : "sc-neg"}">` +
+        `${rankCents(r.score)}</td>` +
+      `<td><div class="mu">${esc(m.title || "")}</div>` +
+        `<div class="pk">${esc(m.pick || "\u2014")}</div>` +
+        `<div class="wy">${esc(rankWhy(m))}</div></td>` +
+      `<td class="n">${price}</td></tr>`;
+  }).join("");
+  return `<h2>Ranked bets \u00B7 best first</h2>` +
+    `<div class="card" style="padding:12px 8px">` +
+    `<table class="rt"><thead><tr><th>#</th><th>verdict</th>` +
+    `<th>score</th><th>match</th><th>price</th></tr></thead>` +
+    `<tbody>${body}</tbody></table>` +
+    `<div class="wy" style="margin:8px 4px 0">Score is expected cents ` +
+    `back per dollar risked, after fees, on a win probability corrected ` +
+    `against ${((matches[0].ranking || {}).fit_sample || 0)} settled ` +
+    `calls. Take from the top.</div></div>`;
+}
+
 function cardHtml(m) {
   const live = (m.live_bid != null || m.live_ask != null)
     ? ` · now <b>${cents(m.live_bid)}/${cents(m.live_ask)}</b>` : "";
@@ -454,6 +543,7 @@ function render(p) {
   const total = (book && book.total) || 0;
 
   document.getElementById("content").innerHTML =
+    rankTableHtml(matches) +
     `<h2>Open calls (${matches.length})</h2>` +
     (matches.length ? matches.map(cardHtml).join("")
       : `<div class="status">No open calls — settled ones are below.</div>`) +
@@ -634,7 +724,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "9be405d2d81f";
+const APP_VERSION = "d2acf5219cd3";
 
 async function checkForUpdate() {
   try {
