@@ -510,6 +510,12 @@ function render(p) {
     ? `${rec.wins}/${rec.graded} ${excludeLive ? "prematch " : ""}calls right · ` +
       `<span class="${rec.pnl >= 0 ? "pnl-pos" : "pnl-neg"}">as-if ${money(rec.pnl)}</span>`
     : "No graded calls yet";
+  // A cancelled market has no winner, so it is counted in no win rate
+  // above -- but it must not look like the call disappeared.
+  if (rec.voided) {
+    document.getElementById("record").innerHTML +=
+      ` <span class="wy">\u00B7 ${rec.voided} voided</span>`;
+  }
   document.getElementById("updated").textContent = agoLine(p.generated_at);
   const s = (p.open && p.open.scout) || {};
   const busy = (s.current_list && s.current_list.length)
@@ -724,7 +730,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "d2acf5219cd3";
+const APP_VERSION = "c0dcd8e97bc3";
 
 async function checkForUpdate() {
   try {
