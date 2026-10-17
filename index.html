@@ -69,6 +69,9 @@
   .bd-THIN { background: #333d36; color: #c7d2cb; }
   .bd-PASS { background: #43100f; color: #fca5a5; }
   .bd-NOBOOK { background: #242b26; color: var(--dim); }
+  .bd-STALE { background: #3d2a06; color: #fcd34d; }
+  .bd-INPLAY { background: #242b26; color: var(--dim);
+               text-decoration: line-through; }
   .sc-pos { color: var(--green); font-weight: 700; }
   .sc-neg { color: var(--red); }
   .rt .divider td { padding: 4px 5px; font-size: 9px; letter-spacing: .06em;
@@ -291,7 +294,9 @@ function timing(m) {
   if (!at || isNaN(at)) return "";
   // Kalshi's listed time is a placeholder and has been a full day wrong;
   // only an analyst-verified start earns a confident countdown.
-  const sure = m.start_source === "verified";
+  // The milestone feed is the real schedule; only Kalshi's market
+  // placeholder is too unreliable to call a match under way on.
+  const sure = ["milestone", "lane", "verified"].includes(m.start_source);
   return '<span class="timing-live" data-start="' + at.toISOString() +
          '" data-sure="' + (sure ? "1" : "0") + '">' +
          timingText(at, sure) + "</span>";
@@ -730,7 +735,7 @@ if ("serviceWorker" in navigator)
 // while the phone keeps showing yesterday's build (Ross, 2026-08-24 saw
 // exactly that). version.txt is written at deploy time from the file's
 // own hash; when it stops matching what this page was built as, reload.
-const APP_VERSION = "c0dcd8e97bc3";
+const APP_VERSION = "6e863f37bb64";
 
 async function checkForUpdate() {
   try {
